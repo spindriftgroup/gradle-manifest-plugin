@@ -1,0 +1,133 @@
+
+plugins {
+    id "com.gradle.plugin-publish" version "0.9.9"
+    id "com.jfrog.bintray" version "1.7.3"
+    id 'java-gradle-plugin'
+}
+
+apply plugin: "com.gradle.plugin-publish"
+
+group 'com.spindrift'
+
+apply plugin: 'groovy'
+apply plugin: 'java-gradle-plugin'
+apply plugin: 'maven-publish'
+apply plugin: 'idea'
+apply plugin: "com.jfrog.bintray"
+
+repositories {
+    jcenter()
+}
+
+dependencies {
+    compile localGroovy()
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+}
+
+gradlePlugin {
+    plugins {
+        atgManifestPlugin {
+            id = 'com.spindrift.atg-manifest'
+            implementationClass = 'com.spindrift.gradle.plugins.ATGManifestPlugin'
+        }
+    }
+}
+
+def versionProps = new Properties()
+file("gradle.properties").withInputStream {versionProps.load(it) }
+version=versionProps.version
+if (!hasProperty('release') || (hasProperty('release') && release!='true')) {
+    project.version+='-SNAPSHOT'
+}
+
+def pluginDescription='Generates Oracle Commerce (ATG) module manifests.'
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+defaultTasks 'publishToMavenLocal'
+publishToMavenLocal.dependsOn 'build'
+
+publishing {
+    publications {
+        mavenGroovy(MavenPublication) {
+            groupId = group
+            artifactId project.name
+            version = version
+            artifact "${project.buildDir}/libs/${project.name}-${version}.jar"
+        }
+    }
+}
+
+task wrapper(type: Wrapper) {
+    gradleVersion = "4.4.1"
+}
+
+//Gradle plugin portal publishing
+pluginBundle {
+    website = 'http://spindriftgroup.com/'
+    vcsUrl = 'https://github.com/spindriftgroup/gradle-manifest-plugin'
+    description = pluginDescription
+    tags = ['atg', 'oracle-commerce', 'oracle', 'spindrift', 'manifest']
+    group = "com.spindrift"
+
+    plugins {
+        integrationTest {
+            id = 'com.spindrift.atg-manifest'
+            displayName = pluginDescription
+        }
+    }
+    mavenCoordinates {
+        groupId = "com.spindrift"
+    }
+}
+
+//Bintray publishing (based on maven-publishing configuration)
+bintray {
+    user = "$BINTRAY_USER"
+    key = "$BINTRAY_API_KEY"
+    publications = ['mavenGroovy']
+    pkg {
+        repo = 'gradle-plugins'
+        name = "atg-manifest"
+        licenses = ['Apache-2.0']
+        vcsUrl = 'https://github.com/spindriftgroup/gradle-manifest-plugin'
+        version {
+            name = project.version
+            desc = "$pluginDescription ${project.version}"
+            released = new Date()
+            vcsTag = project.version
+            attributes = ['gradle-plugin':'com.spindrift:atg-manifest']
+        }
+    }
+}
+
+//Add functional testing configuration for gradle testkit
+sourceSets {
+    functionalTest {
+        groovy.srcDir file('src/functionalTest/groovy')
+        resources.srcDir file('src/functionalTest/resources')
+        compileClasspath += sourceSets.main.output + configurations.testRuntime
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+task functionalTest(type: Test) {
+    description = 'Runs the functional tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.functionalTest.output.classesDirs
+    classpath = sourceSets.functionalTest.runtimeClasspath
+    mustRunAfter test
+}
+
+check.dependsOn functionalTest
+
+gradlePlugin {
+    testSourceSets sourceSets.functionalTest
+}
+
+dependencies {
+    functionalTestCompile('org.spockframework:spock-core:1.0-groovy-2.4') {
+        exclude module: 'groovy-all'
+    }
+}
