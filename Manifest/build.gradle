@@ -1,0 +1,11 @@
+//Switch groovy<--java dependency to java<--groovy
+sourceSets {
+  main {
+    groovy {
+      srcDirs = ['src/main/groovy', 'src/main/java']
+    }
+    java {
+      srcDirs = []
+    }
+  }
+}

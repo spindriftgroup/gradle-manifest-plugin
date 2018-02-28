@@ -9,56 +9,72 @@
  */
 package com.spindrift.gradle.plugins
 
-import org.gradle.api.Plugin
-import org.gradle.api.Project
-import org.gradle.api.Task
+import com.spindrift.atg.manifest.*
+import org.gradle.api.*
+import java.nio.file.*
 
-/**
- * Provides configuration for the ATG Manifest generator plugin
- * All properties can be set directly or using its DSL equivalent
- * e.g.
- * <code>
- * atgManifest {
- *   moduleName='myModuleName' //Direct setting
- *   moduleName 'myModuleName' //Optional DSL style setting
- * }
- * </code>
- *
- * @author hallatech
- *
- */
 class ATGManifestPlugin implements Plugin<Project> {
 
-    public static final PLUGIN_EXTENSION_NAME = "atgManifest"
-    public static final GENERATE_TASK_NAME = "generateModuleManifest"
-    public static final GENERATE_TASK_DESCRIPTION = "Generates the Oracle Commerce (ATG) module manifest."
-    public static final CLEAN_TASK_NAME = "cleanModuleManifest"
-    public static final CLEAN_TASK_DESCRIPTION = "Deletes the Oracle Commerce (ATG) module manifest."
-    public static final TASK_GROUP = "ATG"
+  public static final PLUGIN_EXTENSION_NAME = "atgManifest"
+  public static final GENERATE_TASK_NAME = "generateModuleManifest"
+  public static final GENERATE_TASK_DESCRIPTION = "Generates the Oracle Commerce (ATG) module manifest."
+  public static final CLEAN_TASK_NAME = "cleanModuleManifest"
+  public static final CLEAN_TASK_DESCRIPTION = "Deletes the Oracle Commerce (ATG) module manifest."
+  public static final TASK_GROUP = "ATG"
 
-    @Override
-    void apply(Project project) {
+  @Override
+  void apply(Project project) {
 
-        project.extensions."${PLUGIN_EXTENSION_NAME}" = new ATGManifestPluginExtension()
+    project.extensions."${PLUGIN_EXTENSION_NAME}" = new DSLManifest(getManifestFilePath(project));
 
-        println "ATG Manifest Plugin applied!"
+    addCleanModuleManifestTask(project)
+    addGenerateModuleManifestTask(project)
+    //TODO add dependency on clean if configured after evaluate
 
-        addGenerateModuleManifestTask(project)
-        addCleanModuleManifestTask(project)
+  }
 
+  private void addCleanModuleManifestTask(Project project) {
+    Task task = project.getTasks().create(CLEAN_TASK_NAME)
+    task.setDescription(CLEAN_TASK_DESCRIPTION)
+    task.setGroup(TASK_GROUP)
+    task.doLast {
+      ManifestCleaner.clean(getManifest(project))
     }
+  }
 
-    private void addGenerateModuleManifestTask(Project project) {
-
-        Task task = project.getTasks().create(GENERATE_TASK_NAME)
-        task.setDescription(GENERATE_TASK_DESCRIPTION)
-        task.setGroup(TASK_GROUP)
-
+  private void addGenerateModuleManifestTask(Project project) {
+    Task task = project.getTasks().create(GENERATE_TASK_NAME)
+    task.setDescription(GENERATE_TASK_DESCRIPTION)
+    task.setGroup(TASK_GROUP)
+    project.afterEvaluate {
+      configureBuildAttributes(project);
     }
-
-    private void addCleanModuleManifestTask(Project project) {
-        Task task = project.getTasks().create(CLEAN_TASK_NAME)
-        task.setDescription(CLEAN_TASK_DESCRIPTION)
-        task.setGroup(TASK_GROUP)
+    task.doLast {
+      ManifestConfigurator.configure(getManifest(project))
+      ManifestWriter.write(getManifest(project), project)
     }
+  }
+
+  private Manifest getManifest(Project project) {
+    (Manifest) project.extensions."${PLUGIN_EXTENSION_NAME}"
+  }
+
+  private Path getManifestFilePath(Project project) {
+    Path path = FileSystems.getDefault()
+        .getPath("${project.projectDir.getAbsolutePath()}/${ManifestConstants.MANIFEST_DIR_NAME}",
+        ManifestConstants.MANIFEST_FILE_NAME)
+    path
+  }
+
+  private void configureBuildAttributes(Project project) {
+    BuildAttributeConfigurator configurator = new BuildAttributeConfigurator()
+    getManifest(project).setModuleFullName(configurator.getModuleFullName(project))
+    getManifest(project).setBuildNumber(configurator.getBuildNumber(project))
+    getManifest(project).setBuiltBy(configurator.getBuiltBy(project))
+    getManifest(project).setBuildVersion(configurator.getBuildVersion(project))
+    getManifest(project).setImplementationVersion(configurator.getImplementationVersion(project))
+    getManifest(project).setBuildTimestamp(configurator.getBuildTimestamp(project))
+  }
+
+
 }

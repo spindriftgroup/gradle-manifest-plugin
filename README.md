@@ -48,7 +48,7 @@ Example configuration overrides
 ===============================
 
 ```$xslt
-  atgManifest {
+  atgManifest { s
     moduleName 'MyModule'
     moduleFullName 'MyModule - Commerce Extensions'
     requiredModules ['DCS','SomeOtherModule']
